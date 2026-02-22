@@ -94,6 +94,14 @@
   • Minimum window size enforced (380×500) to prevent broken layouts
   • Content stretches horizontally as window widens
 
+  DEPLOYMENT & POST-BUILD
+  ────────────────────────
+  • Standalone .exe created via PyInstaller (55MB, bundled dependencies)
+  • Freeze-safe path handling for .env and JSON persistence
+  • Windows Startup integration (auto-starts app on login)
+  • GitHub CI-ready structure with .gitignore and .env.example templates
+  • Final release published to GitHub with binaries attached
+
 ================================================================================
   SKILLS DEMONSTRATED
 ================================================================================

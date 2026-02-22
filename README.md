@@ -6,6 +6,12 @@
 
 ---
 
+## 📥 [Download Latest Release](https://github.com/jestkent/LyreAura/releases/latest)
+
+**LyreAura.exe** is now available! No Python installation required. Just download, set your API key, and focus.
+
+---
+
 ## 🚀 Features
 
 | Feature | Details |
@@ -21,6 +27,7 @@
 | 💾 Session Restore | Your last search results and queue are restored on every launch |
 | 🖥️ System Tray | Minimize to tray, live timer countdown in tooltip |
 | 🔄 Scrollable UI | Fully resizable window with mouse-wheel scrollable content |
+| 🚀 Windows Auto-Start | Optionally starts with Windows for seamless productivity |
 
 ---
 
