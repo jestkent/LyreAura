@@ -1,0 +1,45 @@
+# ── Secrets ───────────────────────────────────────────────────────────────────
+.env
+
+# ── User data (personal playlists & session — not everyone wants this public) ─
+playlists.json
+session.json
+
+# ── PyInstaller build output (distribute the .exe separately, not via git) ────
+build/
+dist/
+*.spec
+LyreAura.exe
+
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# ── Virtual environment ───────────────────────────────────────────────────────
+.venv/
+venv/
+env/
+ENV/
+
+# ── Temp audio files (downloaded by yt-dlp into system temp, but just in case)
+lyreaura_*.mp3
+lyreaura_*.m4a
+lyreaura_*.webm
+lyreaura_*.opus
+
+# ── OS / Editor junk ─────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*.swo
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace

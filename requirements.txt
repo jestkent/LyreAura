@@ -1,0 +1,6 @@
+google-api-python-client
+yt-dlp
+pygame
+python-dotenv
+pystray
+Pillow

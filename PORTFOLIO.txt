@@ -1,0 +1,195 @@
+================================================================================
+  LYREAURA — PORTFOLIO DOCUMENTATION
+  A Personal Project by [Your Name]
+================================================================================
+
+  "I noticed I was sitting too long while programming — and it wasn't healthy.
+   So I built a tool that reminds me to stand up, stretch, and still lets me
+   listen to music I love while I work."
+
+  — The reason LyreAura exists.
+
+================================================================================
+  PROJECT OVERVIEW
+================================================================================
+
+  Name      : LyreAura
+  Type      : Desktop Application (Windows)
+  Language  : Python 3.10+
+  UI        : Tkinter (native GUI — no Electron, no browser, minimal RAM usage)
+  Source    : Single-file architecture (main.py)
+
+  LyreAura is a Pomodoro productivity timer combined with a full-featured
+  YouTube Music player. It was born from a real personal problem: spending
+  hours programming without moving, which causes back pain, eye strain, and
+  burnout. Rather than using an existing app, I built one tailored to exactly
+  what I needed — and added YouTube music integration because I genuinely
+  can't focus without music.
+
+================================================================================
+  THE PROBLEM I SOLVED
+================================================================================
+
+  Problem  : Long programming sessions with no movement reminders + no native
+             music player that integrates with my workflow.
+
+  Solution : A lightweight desktop app that:
+             1. Tracks time using the Pomodoro Technique (25-min work blocks)
+             2. Forces a stand-up prompt on every break (can't be dismissed
+                without acknowledging it)
+             3. Plays YouTube audio in the background using the official
+                YouTube Data API v3 — no piracy, no grey areas
+             4. Saves your queue and playlists between sessions so you never
+                lose your setup
+
+================================================================================
+  FEATURES BUILT
+================================================================================
+
+  POMODORO TIMER
+  ─────────────
+  • Circular countdown ring drawn with Tkinter Canvas arcs (custom rendering)
+  • Configurable Work / Short Break / Long Break durations
+  • Auto-transitions between work and break phases
+  • Stand-up reminder popup with rotating healthy stretch tips
+  • Session counter (e.g., "Session 2 of 4")
+  • System tray icon with live countdown tooltip (minimize-to-tray)
+
+  YOUTUBE MUSIC PLAYER
+  ────────────────────
+  • YouTube Data API v3 integration — search filtered to Music category
+  • Audio extraction via yt-dlp + FFmpeg (MP3 conversion for reliable playback)
+  • pygame mixer for low-latency audio playback
+  • Scrolling "Now Playing" marquee label
+  • Volume slider with mute button (remembers pre-mute level)
+  • Previous / Play-Pause / Next / Shuffle controls
+
+  QUEUE SYSTEM
+  ────────────
+  • Add any search result to a playback queue
+  • Reorder queue items (Move Up / Move Down)
+  • Auto-advance: next queued track plays automatically when current ends
+  • Double-click any queue item to play immediately
+
+  PLAYLIST MANAGER
+  ────────────────
+  • Create named playlists with a custom modal dialog
+  • Add tracks from search results to any playlist
+  • Load playlist into the player (populates search list without auto-playing)
+  • Queue an entire playlist with one click ("Play All")
+  • Remove individual tracks, save, or delete playlists
+  • All playlists saved to playlists.json — persist between app restarts
+
+  SESSION PERSISTENCE
+  ───────────────────
+  • Last search results and queue saved to session.json on every change
+  • On launch, the previous session is fully restored — songs, queue, position
+  • API key stored in .env and loaded via python-dotenv
+
+  RESIZABLE / SCROLLABLE UI
+  ─────────────────────────
+  • Window is freely resizable and movable
+  • All content wrapped in a scrollable Canvas frame
+  • Mouse-wheel scroll supported
+  • Minimum window size enforced (380×500) to prevent broken layouts
+  • Content stretches horizontally as window widens
+
+================================================================================
+  SKILLS DEMONSTRATED
+================================================================================
+
+  PYTHON
+  ──────
+  • OOP — entire app is a single well-organized class (App) with clear method
+    boundaries and separation of concerns
+  • Threading — audio download/extraction runs on a daemon thread; UI never
+    freezes during network operations
+  • File I/O — reading/writing JSON (playlists, session), .env handling
+  • Error handling — graceful degradation when libraries are missing (PYGAME_OK,
+    YTDLP_OK, etc.), try/except throughout network and I/O calls
+  • Standard library mastery — wave, struct, io, math, threading, tempfile,
+    os, json, random — all used without external bloat
+
+  GUI DEVELOPMENT (TKINTER)
+  ─────────────────────────
+  • Custom Canvas drawing — circular timer ring with arc-based progress
+  • Scrollable Canvas container for resizable layout
+  • Dynamic widget creation and event binding
+  • Custom modal dialogs (create playlist, stand-up reminder, API key prompt)
+  • Layout management with pack(), expand, fill, padx/pady
+  • Hover effects, color theming, font management
+
+  API INTEGRATION
+  ───────────────
+  • YouTube Data API v3 — search endpoint with category filtering
+  • Google API Python Client library
+  • API key management via environment variables (.env / python-dotenv)
+  • Quota-aware usage (100 units per search, 10,000 free daily)
+
+  AUDIO / MULTIMEDIA
+  ──────────────────
+  • yt-dlp for extracting best-quality audio streams from YouTube
+  • FFmpeg post-processing for MP3 conversion
+  • pygame.mixer for real-time music playback, pause, resume, volume control
+  • Procedurally generated sine-wave beep (pure Python, no audio file needed)
+
+  DEVOPS / ENVIRONMENT
+  ────────────────────
+  • Virtual environment (.venv) setup and management
+  • requirements.txt dependency pinning
+  • .env / .env.example pattern for secret management
+  • Windows-compatible path handling (shutil.which, os.path)
+
+  PRODUCT THINKING
+  ────────────────
+  • Built to solve a real personal problem, not as a tutorial exercise
+  • UX decisions: no auto-play (user stays in control), custom dialogs over
+    system dialogs (avoids visibility bugs on Windows), session restore so
+    the app feels continuous across restarts
+  • Low resource footprint intentionally chosen over Electron alternatives
+
+================================================================================
+  TECHNICAL STACK
+================================================================================
+
+  Core         Python 3.10+, Tkinter
+  Audio        pygame 2.x, yt-dlp, FFmpeg
+  API          Google API Python Client (YouTube Data API v3)
+  Persistence  python-dotenv, JSON files
+  System Tray  pystray, Pillow
+  Platform     Windows 10/11
+
+================================================================================
+  WHAT I LEARNED BUILDING THIS
+================================================================================
+
+  1. Threading discipline — pygame and Tkinter both have their own event loops.
+     Learning to safely pass data between threads (using root.after() to
+     schedule UI updates from worker threads) was the biggest challenge.
+
+  2. API design reality — YouTube's audio URLs expire and can't be streamed
+     directly by pygame. I had to design a download-then-play flow using
+     temp files, which taught me about real-world API limitations.
+
+  3. Tkinter's scrollable layout — Tkinter doesn't have a built-in scrollable
+     frame. Building one with Canvas + create_window() and binding Configure
+     events to update scroll regions was a great deep-dive into how Tkinter's
+     geometry system actually works.
+
+  4. UX > features — The first version auto-played on click. Users hated it.
+     Separating selection from playback (adding an explicit Play button) was
+     a small change that made the app feel much more intentional.
+
+================================================================================
+  CONTACT / PORTFOLIO
+================================================================================
+
+  This project is part of my personal portfolio showcasing real-world Python
+  desktop application development, API integration, and self-driven problem
+  solving.
+
+  GitHub  : [your GitHub URL]
+  LinkedIn: [your LinkedIn URL]
+  Email   : [your email]
+
+================================================================================
