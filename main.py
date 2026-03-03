@@ -747,6 +747,16 @@ class App:
         )
         self._load_thread.start()
 
+    def _find_cached_audio(self, track_id: str) -> str | None:
+        """Check if audio for this track already exists in temp directory."""
+        tmp_dir = tempfile.gettempdir()
+        base = os.path.join(tmp_dir, f"lyreaura_{track_id}")
+        for ext in (".mp3", ".m4a", ".ogg", ".webm", ".opus", ".wav"):
+            path = base + ext
+            if os.path.exists(path) and os.path.getsize(path) > 1000:
+                return path
+        return None
+
     def _extract_and_play(self, track: dict):
         if not YTDLP_OK:
             self.root.after(0, lambda: self._set_status("yt-dlp not installed", error=True))
@@ -756,21 +766,61 @@ class App:
         tmp_tmpl  = os.path.join(tmp_dir, f"lyreaura_{track['id']}.%(ext)s")
         expected_mp3 = os.path.join(tmp_dir, f"lyreaura_{track['id']}.mp3")
 
+        # ── Cache check: skip download if file already exists ──────────────
+        cached = self._find_cached_audio(track['id'])
+        if cached:
+            self.root.after(0, lambda: self._set_status("Playing from cache ⚡"))
+            self.root.after(0, lambda p=cached, t=track: self._play_audio(p, t))
+            return
+
         import shutil
         ffmpeg_bin = shutil.which("ffmpeg") or r"C:\Program Files\ffmpeg\bin\ffmpeg.exe"
         has_ffmpeg = bool(shutil.which("ffmpeg")) or os.path.exists(ffmpeg_bin)
+
+        # ── Progress hook: show download % in status bar ───────────────────
+        def _progress_hook(d):
+            if d.get("status") == "downloading":
+                pct = d.get("_percent_str", "").strip()
+                speed = d.get("_speed_str", "").strip()
+                eta = d.get("_eta_str", "").strip()
+                msg = f"Downloading… {pct}"
+                if speed:
+                    msg += f"  ↓ {speed}"
+                if eta:
+                    msg += f"  ETA {eta}"
+                self.root.after(0, lambda m=msg: self._set_status(m))
+            elif d.get("status") == "finished":
+                self.root.after(0, lambda: self._set_status("Converting audio…"))
+
+        # ── Probe duration to adjust quality for long songs ────────────────
+        audio_quality = "192"
+        try:
+            with yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True}) as probe:
+                info_probe = probe.extract_info(url, download=False)
+                duration = info_probe.get("duration", 0) or 0
+                if duration > 1200:  # > 20 minutes
+                    audio_quality = "128"
+                    self.root.after(0, lambda d=duration: self._set_status(
+                        f"Long track ({d // 60}m) — using optimised download…"))
+        except Exception:
+            pass
 
         opts = {
             "format": "bestaudio/best",
             "quiet": True,
             "no_warnings": True,
             "outtmpl": tmp_tmpl,
+            "progress_hooks": [_progress_hook],
+            "socket_timeout": 30,
+            "retries": 3,
+            "fragment_retries": 5,
+            "http_chunk_size": 10485760,  # 10 MB chunks for reliability
         }
         if has_ffmpeg:
             opts["postprocessors"] = [{
                 "key": "FFmpegExtractAudio",
                 "preferredcodec": "mp3",
-                "preferredquality": "192",
+                "preferredquality": audio_quality,
             }]
             if not shutil.which("ffmpeg"):
                 opts["ffmpeg_location"] = os.path.dirname(ffmpeg_bin)
