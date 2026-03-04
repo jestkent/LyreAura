@@ -157,6 +157,13 @@ class App:
         self._muted: bool               = False
         self._vol_before_mute: int      = 70
 
+        # Seek / progress bar state
+        self._track_duration: float     = 0.0    # total duration in seconds
+        self._playback_start: float     = 0.0    # time.time() when playback started/resumed
+        self._elapsed_before_pause: float = 0.0  # accumulated seconds before last pause
+        self._seeking: bool             = False  # True while user is dragging the slider
+        self._seek_after_id             = None
+
         # Playlist manager state  { name: [track_dict, ...] }
         self.playlists: dict            = {}
         self.active_playlist_name: str  = ""
@@ -394,6 +401,29 @@ class App:
                                bg=BG, fg=ACCENT, font=get_font(9, "bold"),
                                anchor="w")
         self.np_lbl.pack(fill="x", padx=18, pady=(2, 0))
+
+        # ── Seek / Progress bar ──────────────────────────────────────────────
+        seek_row = tk.Frame(root, bg=BG)
+        seek_row.pack(fill="x", padx=18, pady=(2, 0))
+
+        self.seek_elapsed_lbl = tk.Label(seek_row, text="0:00", bg=BG, fg=MUTED,
+                                         font=get_font(7), width=5, anchor="e")
+        self.seek_elapsed_lbl.pack(side="left")
+
+        self.seek_slider = tk.Scale(seek_row, from_=0, to=100,
+                                    orient="horizontal", bg=BG, fg=WHITE,
+                                    troughcolor=CARD, activebackground=ACCENT,
+                                    highlightthickness=0, sliderrelief="flat",
+                                    showvalue=False, command=self._on_seek_drag,
+                                    sliderlength=14)
+        self.seek_slider.set(0)
+        self.seek_slider.pack(side="left", fill="x", expand=True, padx=(4, 4))
+        self.seek_slider.bind("<ButtonPress-1>", self._on_seek_press)
+        self.seek_slider.bind("<ButtonRelease-1>", self._on_seek_release)
+
+        self.seek_total_lbl = tk.Label(seek_row, text="0:00", bg=BG, fg=MUTED,
+                                       font=get_font(7), width=5, anchor="w")
+        self.seek_total_lbl.pack(side="left")
 
         # ── Playback controls ────────────────────────────────────────────────
         pb = tk.Frame(root, bg=BG)
@@ -770,6 +800,14 @@ class App:
         cached = self._find_cached_audio(track['id'])
         if cached:
             self.root.after(0, lambda: self._set_status("Playing from cache ⚡"))
+            # Probe duration for cached files if not already known
+            if not track.get("duration"):
+                try:
+                    snd = pygame.mixer.Sound(cached)
+                    track["duration"] = snd.get_length()
+                    del snd
+                except Exception:
+                    pass
             self.root.after(0, lambda p=cached, t=track: self._play_audio(p, t))
             return
 
@@ -798,6 +836,7 @@ class App:
             with yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True}) as probe:
                 info_probe = probe.extract_info(url, download=False)
                 duration = info_probe.get("duration", 0) or 0
+                track["duration"] = duration  # pass to _play_audio for seek bar
                 if duration > 1200:  # > 20 minutes
                     audio_quality = "128"
                     self.root.after(0, lambda d=duration: self._set_status(
@@ -856,6 +895,38 @@ class App:
             pygame.mixer.music.play()
             self.is_playing = True
             self._track_loaded = True
+            self._current_file_path = file_path
+
+            # Reset seek bar state
+            self._elapsed_before_pause = 0.0
+            self._playback_start = time.time()
+
+            # Get duration from track dict (set by _extract_and_play)
+            dur = track.get("duration", 0) or 0
+            if dur <= 0:
+                # Fallback: try to get duration from the audio file via pygame
+                try:
+                    snd = pygame.mixer.Sound(file_path)
+                    dur = snd.get_length()
+                    del snd
+                except Exception:
+                    dur = 0
+            self._track_duration = float(dur)
+
+            # Update seek bar range and labels
+            if self._track_duration > 0:
+                self.seek_slider.config(to=int(self._track_duration))
+                self.seek_slider.set(0)
+                self.seek_total_lbl.config(text=self._fmt_time(self._track_duration))
+            else:
+                self.seek_slider.config(to=100)
+                self.seek_slider.set(0)
+                self.seek_total_lbl.config(text="--:--")
+            self.seek_elapsed_lbl.config(text="0:00")
+
+            # Start the seek bar updater
+            self._start_seek_updater()
+
             self._update_now_playing("♪ " + track["title"])
             self._set_status("")
         except Exception as exc:
@@ -866,14 +937,85 @@ class App:
         if not PYGAME_OK:
             return
         if self.is_playing:
+            # Pausing — accumulate elapsed time
+            self._elapsed_before_pause += time.time() - self._playback_start
             pygame.mixer.music.pause()
             self.is_playing = False
         elif self._track_loaded:
+            # Resuming — restart the clock
+            self._playback_start = time.time()
             pygame.mixer.music.unpause()
             self.is_playing = True
+            self._start_seek_updater()
         else:
             # Nothing loaded yet — play the selected/first track
             self._play_selected_result()
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # SEEK / PROGRESS BAR
+    # ══════════════════════════════════════════════════════════════════════════
+    @staticmethod
+    def _fmt_time(secs: float) -> str:
+        """Format seconds into m:ss or h:mm:ss."""
+        s = max(0, int(secs))
+        if s >= 3600:
+            h, rem = divmod(s, 3600)
+            m, sec = divmod(rem, 60)
+            return f"{h}:{m:02d}:{sec:02d}"
+        m, sec = divmod(s, 60)
+        return f"{m}:{sec:02d}"
+
+    def _start_seek_updater(self):
+        """Begin/restart the periodic seek bar updater."""
+        if self._seek_after_id:
+            self.root.after_cancel(self._seek_after_id)
+            self._seek_after_id = None
+        self._update_seek_bar()
+
+    def _update_seek_bar(self):
+        """Periodically update the seek slider and elapsed time label."""
+        if self.is_playing and not self._seeking:
+            elapsed = self._elapsed_before_pause + (time.time() - self._playback_start)
+            elapsed = min(elapsed, self._track_duration) if self._track_duration > 0 else elapsed
+            self.seek_elapsed_lbl.config(text=self._fmt_time(elapsed))
+            if self._track_duration > 0:
+                self.seek_slider.set(int(elapsed))
+        if self.is_playing:
+            self._seek_after_id = self.root.after(500, self._update_seek_bar)
+        else:
+            self._seek_after_id = None
+
+    def _on_seek_press(self, _event=None):
+        """User started dragging the seek slider."""
+        self._seeking = True
+
+    def _on_seek_release(self, _event=None):
+        """User released the seek slider — perform the actual seek."""
+        if not PYGAME_OK or not self._track_loaded:
+            self._seeking = False
+            return
+        target_sec = self.seek_slider.get()
+        try:
+            # For MP3 files, set_pos seeks to absolute seconds
+            pygame.mixer.music.play(start=target_sec)
+            if not self.is_playing:
+                pygame.mixer.music.pause()
+        except Exception:
+            try:
+                pygame.mixer.music.set_pos(target_sec)
+            except Exception:
+                pass
+        self._elapsed_before_pause = float(target_sec)
+        self._playback_start = time.time()
+        self.seek_elapsed_lbl.config(text=self._fmt_time(target_sec))
+        self._seeking = False
+        if self.is_playing:
+            self._start_seek_updater()
+
+    def _on_seek_drag(self, val):
+        """Live update the elapsed label while dragging (no actual seek yet)."""
+        if self._seeking:
+            self.seek_elapsed_lbl.config(text=self._fmt_time(float(val)))
 
     def _prev_track(self):
         if self._playing_from_queue:
